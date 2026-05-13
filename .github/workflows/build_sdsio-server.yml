@@ -42,7 +42,7 @@ jobs:
         run: pip install pyinstaller
 
       - name: Install dependencies
-        run: pip install -r ./utilities/requirements.txt
+        run: pip install pandas pyserial libusb1 pyyaml ifaddr
 
       - name: Extract SDSIO Server version
         shell: bash
