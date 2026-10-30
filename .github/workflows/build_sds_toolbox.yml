@@ -23,11 +23,11 @@ jobs:
       fail-fast: false
       matrix:
         target:
-          - { os: windows-2025,     platform: windows,     pyinstaller_args: '' }
+          - { os: windows-2025,     platform: windows-amd64, pyinstaller_args: '' }
           # - { os: windows-11-arm,   platform: windows-arm64, pyinstaller_args: '' }
-          - { os: macos-15,         platform: macos,       pyinstaller_args: --strip }
-          - { os: ubuntu-24.04,     platform: linux,       pyinstaller_args: --strip }
-          - { os: ubuntu-24.04-arm, platform: linux-arm64, pyinstaller_args: --strip }
+          - { os: macos-15,         platform: darwin-arm64,  pyinstaller_args: --strip }
+          - { os: ubuntu-24.04,     platform: linux-amd64,   pyinstaller_args: --strip }
+          - { os: ubuntu-24.04-arm, platform: linux-arm64,   pyinstaller_args: --strip }
         utility:
           - name: sds-check
             requirements: ''
@@ -82,7 +82,6 @@ jobs:
         with:
           name: ${{ matrix.utility.name }}-${{ matrix.target.platform }}
           path: dist/${{ matrix.utility.name }}*
-          retention-days: 1
 
   # Package SDS-Toolbox for different platforms
   package:
@@ -91,41 +90,50 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       actions: write
+      contents: read
     strategy:
       matrix:
-        platform: [windows, linux, macos, linux-arm64]
+        platform: [windows-amd64, darwin-arm64, linux-amd64, linux-arm64]
     env:
       PLATFORM: ${{ matrix.platform }}
       UTILITIES: sds-check sds-convert sds-view sdsio-server
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
       - name: Download platform executables
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: '*-${{ matrix.platform }}'
-          path: bin
+          path: sds-toolbox-${{ matrix.platform }}/bin
           merge-multiple: true
 
       - name: Create platform archive
         shell: bash
         run: |
+          package_dir="sds-toolbox-$PLATFORM"
           suffix=""
-          if [ "$PLATFORM" = windows ]; then suffix=".exe"; fi
+          if [ "$PLATFORM" = windows-amd64 ]; then suffix=".exe"; fi
 
           for utility in $UTILITIES; do
-            test -f "bin/$utility$suffix"
+            test -f "$package_dir/bin/$utility$suffix"
           done
 
-          if [ "$PLATFORM" != windows ]; then chmod +x bin/*; fi
-          zip -q -r "sds-toolbox-$PLATFORM.zip" bin
+          cp LICENSE "$package_dir/LICENSE"
+          if [ "$PLATFORM" = windows-amd64 ]; then
+            zip -q -r "$package_dir.zip" "$package_dir"
+          else
+            chmod +x "$package_dir"/bin/*
+            tar -czf "$package_dir.tar.gz" "$package_dir"
+          fi
 
       - name: Upload platform archive
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          path: sds-toolbox-${{ matrix.platform }}.zip
+          path: sds-toolbox-${{ matrix.platform }}.*
           archive: false
           if-no-files-found: error
-          retention-days: 1
 
       - name: Remove temporary tool artifacts
         shell: bash
